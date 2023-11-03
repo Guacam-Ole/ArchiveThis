@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using ArchiveThis.Models;
+using Microsoft.Extensions.Logging;
 
 namespace ArchiveThis
 {
@@ -17,6 +18,7 @@ namespace ArchiveThis
         private int _storeIntervalMinutes;
         private int _replyIntervalMinutes;
         private int _cleanupIntervalMinutes;
+        private int _hashtagIntervalMinutes;
         private const int _requestIntervalMinutes = 1;
 
         public void ArchiveNewRequrest()
@@ -34,15 +36,25 @@ namespace ArchiveThis
         private void WriteSingleReply()
         { }
 
-        private void StartTimers()
-        {
-            var RequestsTimer = new Timer(RequestTimerExecute, null, 0, 60000 * _requestIntervalMinutes);
-            var StoreUrlsTimer = new Timer(StoreTimerExecute, null, 0, 60000 * _storeIntervalMinutes);
-            var ReplyTimer = new Timer(ReplyTimerExecute, null, 0, 60000 * _replyIntervalMinutes);
-            var CleanupTimer = new Timer(CleanupTimerExecute, null, 0, 60000 * _cleanupIntervalMinutes);
+        private Timer InitTimer(TimerCallback timerCallback, int intervalMinutes) {
+            return new Timer(timerCallback, null, 0, 60000*intervalMinutes);
         }
 
-        private async void CleanupTimerExecute(object? state)
+        private void StartTimers()
+        {
+            InitTimer(RequestTimerCallback, _requestIntervalMinutes);
+            InitTimer(StoreTimerCallback, _storeIntervalMinutes);
+            InitTimer(ReplyTimerExecute, _replyIntervalMinutes);
+            InitTimer(CleanupTimerCallback, _cleanupIntervalMinutes);
+            InitTimer(HashtagTimerCallback, _hashtagIntervalMinutes);
+        }
+
+        private void HashtagTimerCallback(object? state)
+        {
+            throw new NotImplementedException();
+        }
+
+        private async void CleanupTimerCallback(object? state)
         {
             await _database.DeleteFinishedItems();
         }
@@ -53,7 +65,7 @@ namespace ArchiveThis
             throw new NotImplementedException();
         }
 
-        private async void StoreTimerExecute(object? state)
+        private async void StoreTimerCallback(object? state)
         {
             var newItems = await _database.GetNewItems();
             var openTasks = new List<Task<ResponseItem>>();
@@ -89,7 +101,7 @@ namespace ArchiveThis
             }
         }
 
-        private async void RequestTimerExecute(object? state)
+        private async void RequestTimerCallback(object? state)
         {
             // TODO: Check Mastodon for mentions
 

@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using ArchiveThis.Models;
+using Microsoft.Extensions.Logging;
 
 namespace ArchiveThis
 {

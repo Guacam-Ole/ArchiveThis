@@ -5,8 +5,8 @@ namespace ArchiveThis
     public class Store
     {
         private readonly ILogger<Store> _logger;
-        private ResponseItem
-        private enum ResponseCodes
+        
+        public enum ResponseCodes
         { AlreadyExists, Stored, Error };
 
         public Store(ILogger<Store> logger)
@@ -14,21 +14,19 @@ namespace ArchiveThis
             _logger = logger;
         }
 
-             public async Task<ResponseItem> GetMastodonResponseForRequest(RequestItem requestItem)
+        public async Task<ResponseItem> GetMastodonResponseForRequest(RequestItem requestItem)
         {
-            if (requestItem.Url==null) return null;
-            var response = await TakeSnapshotFrom(requestItem.Url);
-            switch (response.Key)
-            {
-                case ResponseCodes.Error:
-                    return new KeyValuePair<long, string?>(replyToToot, $"Sorry. Could not store that URL. Will not retry, either");
-                case ResponseCodes.AlreadyExists:
-                    return new KeyValuePair<long, string?>(replyToToot, $"That URL had already been stored into the archive before. Here it is nonetheless:\n\n{response.Value}");
-                case ResponseCodes.Stored:
-                    return new KeyValuePair<long, string?>(replyToToot, $"URL has been archived as:\n\n{response.Value}");
-                default:
-                    return new KeyValuePair<long, string?>(replyToToot, null);
+            var responseItem=new ResponseItem  {
+                RequestId=requestItem.Id,
+                ResponseCode= ResponseCodes.Error
+            };
+
+            if (requestItem.Url!=null) {
+                var response = await TakeSnapshotFrom(requestItem.Url);
+                responseItem.ArchiveUrl=response.Value;
+                responseItem.ResponseCode=response.Key;
             }
+            return responseItem;
         }
 
         private async Task<KeyValuePair<ResponseCodes, string?>> TakeSnapshotFrom(string urlToStore)

@@ -1,0 +1,14 @@
+{
+    "Instance":"mastodon.social",
+    "Secret": "wonttell",
+    "StatusToot":"",
+    "HashTags": [] ,
+    "Sites":[
+        {
+            "Domain":"abendblatt.de",
+            "FailureContent":"du doof"
+        }
+    ] 
+}
+    
+// copy to config.json

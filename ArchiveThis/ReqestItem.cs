@@ -8,6 +8,7 @@ public class RequestItem {
     public string? Url {get;set;}
     public RequestStates State {get;set;}
     public int Id {get;set;}
+    public string? ArchiveUrl {get;set;}
 
 
 }

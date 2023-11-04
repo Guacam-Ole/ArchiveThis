@@ -4,6 +4,7 @@ using System;
 using Newtonsoft.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Net.Security;
 
 public class Program
 {
@@ -11,8 +12,10 @@ public class Program
     {
         Console.WriteLine("Mastodon-WaybackBot init");
         var services=AddServices();
-        var toot        =services.GetRequiredService<Toot>();
-         toot.CheckForNewTagContents().Wait();
+        var archive=services.GetRequiredService<Archive>();
+        archive.ArchiveUrlsForHashtag().Wait();
+        archive.RespondHashtagResults().Wait();
+
      }
 
 
@@ -21,16 +24,19 @@ public class Program
     {
         var services = new ServiceCollection();
 
-        // services.AddLogging(logging =>
-        // {
-        //     logging.ClearProviders();
-        //     logging.AddConsole();
-        //     logging.SetMinimumLevel(LogLevel.Debug);
-        //     var logFile = "youtoot.log";
-        //     logging.AddFile(logFile, conf => { conf.Append = true; conf.MaxRollingFiles = 1; conf.FileSizeLimitBytes = 100000; });
-        // });
+        services.AddLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.AddConsole();
+            logging.SetMinimumLevel(LogLevel.Debug);
+            var logFile = "archivethis.log";
+            logging.AddFile(logFile, conf => { conf.Append = true; conf.MaxRollingFiles = 1; conf.FileSizeLimitBytes = 100000; });
+        });
         services.AddSingleton<Database>();
         services.AddScoped<Toot>();
+        services.AddScoped<Archive>();
+        services.AddScoped<Store>();
+        services.AddSingleton<Config>(Config.GetConfig());
 
         var provider = services.BuildServiceProvider();
         return provider;

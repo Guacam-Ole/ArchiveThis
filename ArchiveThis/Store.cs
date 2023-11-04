@@ -18,7 +18,7 @@ namespace ArchiveThis
         public async Task<ResponseItem> GetMastodonResponseForRequest(RequestItem requestItem)
         {
             var responseItem=new ResponseItem  {
-                RequestId=requestItem.Id,
+                RequestId=requestItem.MastodonId,
                 ResponseCode= ResponseCodes.Error
             };
 

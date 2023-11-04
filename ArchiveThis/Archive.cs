@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Xml.Serialization;
+using ArchiveThis.Config;
 using ArchiveThis.Models;
 using Microsoft.Extensions.Logging;
 
@@ -10,15 +11,10 @@ namespace ArchiveThis
         private readonly Database _database;
         private readonly Store _store;
         private readonly Toot _toot;
-        private readonly Config _config;
+        private readonly Config.Config _config;
         private readonly ILogger<Archive> _logger;
-        private int _storeIntervalMinutes = 120;
-        private int _replyIntervalMinutes = 120;
-        private int _cleanupIntervalMinutes = 120;
-        private int _hashtagIntervalMinutes = 1;
-        private const int _requestIntervalMinutes = 120;
 
-        public Archive(Database database, Toot toot, Store store, Config config, ILogger<Archive> logger)
+        public Archive(Database database, Toot toot, Store store, Config.Config config, ILogger<Archive> logger)
         {
             _database = database;
             _store = store;
@@ -27,34 +23,19 @@ namespace ArchiveThis
             _logger = logger;
         }
 
-        public void ArchiveNewRequrest()
-        { }
 
-        private void ReadNewRequests()
-        { }
-
-        private void StoreRequests()
-        { }
-
-        private void WriteReplies()
-        { }
-
-        private void WriteSingleReply()
-        { }
-
-        private Timer InitTimer(TimerCallback timerCallback, int intervalMinutes)
+        private Timer InitTimer(TimerCallback timerCallback, SingleTimer timerSettings)
         {
-            return new Timer(timerCallback, null, 0, 60000 * intervalMinutes);
+            return new Timer(timerCallback, null, timerSettings.Delay, timerSettings.Interval);
         }
-
 
         public void StartTimers()
         {
-            InitTimer(RequestTimerCallback, _requestIntervalMinutes);
-            InitTimer(StoreTimerCallback, _storeIntervalMinutes);
-            InitTimer(ReplyTimerExecute, _replyIntervalMinutes);
-            InitTimer(CleanupTimerCallback, _cleanupIntervalMinutes);
-            InitTimer(HashtagTimerCallback, _hashtagIntervalMinutes);
+            InitTimer(CheckMastodonRequestsTimer, _config.Timers.CheckForMastodonRequests);
+            InitTimer(StoreUrlsInArchiveTimer, _config.Timers.SendRequestsToArchive);
+            InitTimer(ReplyTimerExecuteTimer, _config.Timers.SendRepliesToMastodon);
+            InitTimer(CleanupTimerCallbackTimer, _config.Timers.CleanUp);
+            InitTimer(HashtagTimerCallbackTimer, _config.Timers.HashTagCheck);
         }
 
         public async Task RespondHashtagResults()
@@ -66,10 +47,10 @@ namespace ArchiveThis
                 _logger.LogDebug("sending '{count}' successful archives for '{tag}' back to Mastodon", succeededItems.Count(), config.Tag);
                 foreach (var item in succeededItems)
                 {
-                    var text=$"That Url has been archived as {item.Url}. \n\n#{config.Tag} #ArchiveThis";
-                    var mastodonResponse=await _toot.SendToot(text, item.MastodonId, false);
-                    item.ResponseId=mastodonResponse?.Id;
-                    item.State= RequestItem.RequestStates.Posted;
+                    var text = $"That Url has been archived as {item.Url}. \n\n#{config.Tag} #ArchiveThis";
+                    var mastodonResponse = await _toot.SendToot(text, item.MastodonId, false);
+                    item.ResponseId = mastodonResponse?.Id;
+                    item.State = RequestItem.RequestStates.Posted;
                 }
                 await _database.UpsertItem(config);
             }
@@ -77,10 +58,12 @@ namespace ArchiveThis
 
         public async Task ArchiveUrlsForHashtag()
         {
-            await _toot.RetrieveNewTagContents();
-            var hashtagConfigs = await _database.GetAllItems<HashtagItem>();
-            foreach (var hashtagConfig in hashtagConfigs)
+            foreach (var hashtag in _config.HashTags)
             {
+                await _toot.GetFeaturedTags(hashtag);
+                var hashtagConfigs = await _database.GetAllItems<HashtagItem>();
+                var hashtagConfig = hashtagConfigs.FirstOrDefault(q => q.Tag == hashtag);
+                if (hashtagConfig == null) continue;
                 foreach (var requestItem in hashtagConfig.RequestItems.Where(q => q.State == RequestItem.RequestStates.Pending))
                 {
                     if (string.IsNullOrEmpty(requestItem.Url))
@@ -102,49 +85,11 @@ namespace ArchiveThis
                 foreach (var item in hashtagConfig.RequestItems.Where(q => q.State == RequestItem.RequestStates.Success))
                 {
                     if (item.Site == null || item.Url == null) continue;
-                    if (await UrlIsFaultyOrHasContent(item.Url, item.Site.FailureContent)) item.State = RequestItem.RequestStates.AlreadyBlocked;
+                    if (await _store.UrlIsFaultyOrHasContent(item.Url, item.Site.FailureContent)) item.State = RequestItem.RequestStates.AlreadyBlocked;
                 }
                 await _database.UpsertItem(hashtagConfig);
             }
         }
-
-        private async void HashtagTimerCallback(object? state)
-        {
-            await ArchiveUrlsForHashtag();
-        }
-
-        private async Task<bool> UrlIsFaultyOrHasContent(string url, string errorContent)
-        {
-            HttpClient client = new HttpClient();
-            var checkingResponse = await client.GetAsync(url);
-            if (!checkingResponse.IsSuccessStatusCode)
-            {
-                return true;
-            }
-            var content = await checkingResponse.Content.ReadAsStringAsync();
-            return content.Contains(errorContent, StringComparison.InvariantCultureIgnoreCase);
-        }
-
-        private async void CleanupTimerCallback(object? state)
-        {
-            await _database.DeleteFinishedItems();
-        }
-
-        private async void ReplyTimerExecute(object? state)
-        {
-            // TODO: Reply responses to Mastodon
-            throw new NotImplementedException();
-        }
-
-        private async void StoreTimerCallback(object? state)
-        {
-            var newItems = await _database.GetNewRequestItems();
-            foreach (var item in await StoreBunchOfItems(newItems))
-            {
-                await _database.UpsertItem(item);
-            }
-        }
-
         private async Task<List<RequestItem>> StoreBunchOfItems(List<RequestItem> items)
         {
             var openTasks = new List<Task<ResponseItem>>();
@@ -189,9 +134,38 @@ namespace ArchiveThis
             return items;
         }
 
-        private async void RequestTimerCallback(object? state)
+        private async void HashtagTimerCallbackTimer(object? state)
         {
-            // TODO: Check Mastodon for mentions
+            _logger.LogInformation("Checking Hashtag contents");
+            await ArchiveUrlsForHashtag();
+        }
+
+        private async void CleanupTimerCallbackTimer(object? state)
+        {
+            _logger.LogInformation("Cleaning up");
+            await _database.DeleteFinishedItems();
+        }
+
+        private async void ReplyTimerExecuteTimer(object? state)
+        {
+            _logger.LogInformation("Replying to Mastodon");
+
+            throw new NotImplementedException();
+        }
+
+        private async void StoreUrlsInArchiveTimer(object? state)
+        {
+            _logger.LogInformation("Archiving Urls");
+            var newItems = await _database.GetNewRequestItems();
+            foreach (var item in await StoreBunchOfItems(newItems))
+            {
+                await _database.UpsertItem(item);
+            }
+        }
+
+        private async void CheckMastodonRequestsTimer(object? state)
+        {
+            _logger.LogInformation("Checking Mastodon for new Requests");
 
             throw new NotImplementedException();
         }

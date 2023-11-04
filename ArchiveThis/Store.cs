@@ -30,6 +30,19 @@ namespace ArchiveThis
             return responseItem;
         }
 
+        public async Task<bool> UrlIsFaultyOrHasContent(string url, string errorContent)
+        {
+            HttpClient client = new HttpClient();
+            var checkingResponse = await client.GetAsync(url);
+            if (!checkingResponse.IsSuccessStatusCode)
+            {
+                return true;
+            }
+            var content = await checkingResponse.Content.ReadAsStringAsync();
+            return content.Contains(errorContent, StringComparison.InvariantCultureIgnoreCase);
+        }
+
+
         private async Task<KeyValuePair<ResponseCodes, string?>> TakeSnapshotFrom(string urlToStore)
         {
             var waybackClient = new WaybackMachineWrapper.WaybackClient();

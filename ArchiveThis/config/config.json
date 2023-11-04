@@ -1,0 +1,16 @@
+{
+
+
+    "HashTags": ["hamburg","ArchiveThisTest"] ,
+    "Sites":[
+        {
+            "Domain":"abendblatt.de",
+            "FailureContent":"du doof"
+        },
+        {
+            "Domain":"zecken.biz",
+            "FailureContent":"du doof"
+        }
+    ] 
+}
+    

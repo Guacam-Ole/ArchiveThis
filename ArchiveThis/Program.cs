@@ -36,7 +36,8 @@ public class Program
         services.AddScoped<Toot>();
         services.AddScoped<Archive>();
         services.AddScoped<Store>();
-        services.AddSingleton<Config>(Config.GetConfig());
+        services.AddSingleton(Config.Config.GetConfig());
+        services.AddSingleton(Config.Secrets.GetSecrets());
 
         var provider = services.BuildServiceProvider();
         return provider;

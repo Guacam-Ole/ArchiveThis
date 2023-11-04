@@ -7,15 +7,13 @@ using Newtonsoft.Json;
 
 public class Toot
 {
-    private Config _config;
     private MastodonClient _client;
     private readonly Database _database;
 
-    public Toot(Database database, Config config)
+    public Toot(Database database, Config.Secrets secrets)
     {
         //  _config = JsonConvert.DeserializeObject<Config>(File.ReadAllText("./config.json")) ?? throw new FileNotFoundException("cannot read config");
-        _config = config;
-        _client = CreateClient(_config.Instance, _config.Secret);
+        _client = CreateClient(secrets.Instance, secrets.AccessToken);
         _database = database;
     }
 
@@ -24,20 +22,13 @@ public class Toot
         return new MastodonClient(instance, secret) ?? throw new Exception("Client could not be created");
     }
 
-    public async Task RetrieveNewTagContents()
-    {
-        foreach (var hashtag in _config.HashTags)
-        {
-            await GetFeaturedTags(hashtag);
-        }
-    }
 
     public async Task<Status> SendToot(string content, string replyTo, bool isPrivate)
     {
         return await _client.PublishStatus(content, isPrivate ? Visibility.Private : Visibility.Public, replyTo);
     }
 
-    private async Task GetFeaturedTags(string hashtag)
+    public async Task GetFeaturedTags(string hashtag)
     {
         var existingConfigs = await _database.GetAllItems<HashtagItem>();
         var hashtagConfig = existingConfigs.FirstOrDefault(q => q.Tag == hashtag) ?? new Models.HashtagItem { Tag = hashtag };

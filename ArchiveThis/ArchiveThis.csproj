@@ -20,10 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
-     <Content Include="config.json">
+     <Content Include="config/config.json">
          <CopyToOutputDirectory>Always</CopyToOutputDirectory>
      </Content>
-
+    <Content Include="config/secrets.json">
+         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+     </Content>
   </ItemGroup>
 
 </Project>

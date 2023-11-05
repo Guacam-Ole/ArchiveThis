@@ -13,6 +13,8 @@ public class Config
     public List<string> HashTags { get; set; }=new List<string>();
     public List<Site> Sites { get; set; }=new List<Site>();
     public Timers Timers {get;set;}=new Timers();
+    public int DeleteSuccessFulRequestAfterDays {get;set;}=30;
+    public int DeleteFailedRequestsAfterDays {get;set;}=14;
 }
 
 public class Site

@@ -32,11 +32,11 @@ namespace ArchiveThis
 
         public void StartTimers()
         {
-            InitTimer(CheckMastodonRequestsTimer, _config.Timers.CheckForMastodonRequests);
-            InitTimer(StoreUrlsInArchiveTimer, _config.Timers.SendRequestsToArchive);
-            InitTimer(ReplyTimerExecuteTimer, _config.Timers.SendRepliesToMastodon);
-            InitTimer(CleanupTimerCallbackTimer, _config.Timers.CleanUp);
-            InitTimer(HashtagTimerCallbackTimer, _config.Timers.HashTagCheck);
+            InitTimer(CheckMastodonRequestsTimerCallback, _config.Timers.CheckForMastodonRequests);
+            InitTimer(StoreUrlsInArchiveTimerCallback, _config.Timers.SendRequestsToArchive);
+            InitTimer(ReplyTimerCallback, _config.Timers.SendRepliesToMastodon);
+            InitTimer(CleanupTimerCallback, _config.Timers.CleanUp);
+            InitTimer(HashtagTimerCallback, _config.Timers.HashTagCheck);
         }
 
         public async Task RespondHashtagResults()
@@ -92,21 +92,25 @@ namespace ArchiveThis
             }
         }
 
-        private async Task<List<RequestItem>> FillRequestsWithExistingResults(List<RequestItem> items) {
-            var oldRequests=await _database.GetAllItems<RequestItem>();
-            var oldHashtags=await _database.GetAllItems<HashtagItem>();
+        private async Task<List<RequestItem>> FillRequestsWithExistingResults(List<RequestItem> items)
+        {
+            var oldRequests = await _database.GetAllItems<RequestItem>();
+            var oldHashtags = await _database.GetAllItems<HashtagItem>();
 
-            var successFullRequests=oldRequests.Where(q=>q.ArchiveUrl!=null).ToList();
-            foreach (var hashtag in oldHashtags) {
-                var successfullHashtagRequests=hashtag.RequestItems.Where(q=>q.ArchiveUrl!=null);
+            var successFullRequests = oldRequests.Where(q => q.ArchiveUrl != null).ToList();
+            foreach (var hashtag in oldHashtags)
+            {
+                var successfullHashtagRequests = hashtag.RequestItems.Where(q => q.ArchiveUrl != null);
                 if (successfullHashtagRequests.Any()) successFullRequests.AddRange(successfullHashtagRequests);
             }
 
-            foreach (var item in items.Where(q=>q.State== RequestItem.RequestStates.Pending)) {
-                var successfulMatch=successFullRequests.FirstOrDefault(q=>q.Url.Equals(item.Url, StringComparison.InvariantCultureIgnoreCase));
-                if (successfulMatch!=null) {
-                    item.State= RequestItem.RequestStates.Success;
-                    item.ArchiveUrl=successfulMatch.ArchiveUrl;
+            foreach (var item in items.Where(q => q.State == RequestItem.RequestStates.Pending))
+            {
+                var successfulMatch = successFullRequests.FirstOrDefault(q => q.Url.Equals(item.Url, StringComparison.InvariantCultureIgnoreCase));
+                if (successfulMatch != null)
+                {
+                    item.State = RequestItem.RequestStates.Success;
+                    item.ArchiveUrl = successfulMatch.ArchiveUrl;
                 }
             }
             return items;
@@ -157,26 +161,45 @@ namespace ArchiveThis
             return items;
         }
 
-        private async void HashtagTimerCallbackTimer(object? state)
+        private async void HashtagTimerCallback(object? state)
         {
             _logger.LogInformation("Checking Hashtag contents");
             await ArchiveUrlsForHashtag();
         }
 
-        private async void CleanupTimerCallbackTimer(object? state)
+        private async void CleanupTimerCallback(object? state)
         {
+            var successStates = new List<RequestItem.RequestStates> {
+                RequestItem.RequestStates.Pending,
+                RequestItem.RequestStates.Running,
+                RequestItem.RequestStates.Posted,
+                RequestItem.RequestStates.Success
+            };
+            var errorStates = new List<RequestItem.RequestStates> {
+                RequestItem.RequestStates.AlreadyBlocked,
+                RequestItem.RequestStates.Error,
+                RequestItem.RequestStates.InvalidUrl
+            };
+
             _logger.LogInformation("Cleaning up");
-            await _database.DeleteFinishedItems();
+            await _database.DeleteFinishedItems(successStates, DateTime.Now.AddDays(-_config.DeleteSuccessFulRequestAfterDays));
+            await _database.DeleteFinishedItems(errorStates, DateTime.Now.AddDays(-_config.DeleteFailedRequestsAfterDays));
+
+            foreach (var hasthags in await _database.GetAllItems<HashtagItem>())
+            {
+                hasthags.RequestItems.RemoveAll(q => successStates.Contains(q.State) && q.Created<DateTime.Now.AddDays(-_config.DeleteSuccessFulRequestAfterDays) );
+                hasthags.RequestItems.RemoveAll(q => errorStates.Contains(q.State) && q.Created<DateTime.Now.AddDays(-_config.DeleteFailedRequestsAfterDays) );
+            }
         }
 
-        private async void ReplyTimerExecuteTimer(object? state)
+        private async void ReplyTimerCallback(object? state)
         {
             _logger.LogInformation("Replying to Mastodon");
 
             throw new NotImplementedException();
         }
 
-        private async void StoreUrlsInArchiveTimer(object? state)
+        private async void StoreUrlsInArchiveTimerCallback(object? state)
         {
             _logger.LogInformation("Archiving Urls");
             var newItems = await _database.GetNewRequestItems();
@@ -186,7 +209,7 @@ namespace ArchiveThis
             }
         }
 
-        private async void CheckMastodonRequestsTimer(object? state)
+        private async void CheckMastodonRequestsTimerCallback(object? state)
         {
             _logger.LogInformation("Checking Mastodon for new Requests");
 

@@ -21,18 +21,11 @@ public class Database
         await collection.UpsertAsync(item);
     }
 
-    // public async Task InsertItem<T>(T item)
-    // {
-    //     using var db = new LiteDatabaseAsync(_db);
-    //     var collection = db.GetCollection<T>();
-    //     await collection.InsertAsync(item);
-    // }
-
-    public async Task DeleteFinishedItems()
+    public async Task DeleteFinishedItems(List<RequestItem.RequestStates> states,  DateTime since)
     {
         using var db = new LiteDatabaseAsync(_db);
         var collection = db.GetCollection<RequestItem>();
-        await collection.DeleteManyAsync(q => q.State == RequestItem.RequestStates.Success || q.State == RequestItem.RequestStates.Error);
+        await collection.DeleteManyAsync(q => states.Contains(q.State) && q.Created<=since);
     }
 
     public async Task<List<T>> GetAllItems<T>()

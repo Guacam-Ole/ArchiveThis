@@ -27,9 +27,10 @@ public class RequestItem
     public DateTime? Updated { get; set; }
     
     
-    public string MastodonId { get; set; }// MastodonId
+    public string MastodonId { get; set; }
     public string? ResponseId {get;set;}
     public string? Url { get; set; }
+    public string? ArchiveUrl {get;set;}
     public RequestStates State { get; set; }
     public Site? Site { get; set; }
 }

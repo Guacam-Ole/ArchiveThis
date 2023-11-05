@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Xml.Serialization;
 using ArchiveThis.Config;
 using ArchiveThis.Models;
@@ -47,7 +48,7 @@ namespace ArchiveThis
                 _logger.LogDebug("sending '{count}' successful archives for '{tag}' back to Mastodon", succeededItems.Count(), config.Tag);
                 foreach (var item in succeededItems)
                 {
-                    var text = $"That Url has been archived as {item.Url}. \n\n#{config.Tag} #ArchiveThis";
+                    var text = $"That Url has been archived as {item.ArchiveUrl}. \n\n#{config.Tag} #ArchiveThis";
                     var mastodonResponse = await _toot.SendToot(text, item.MastodonId, false);
                     item.ResponseId = mastodonResponse?.Id;
                     item.State = RequestItem.RequestStates.Posted;
@@ -90,9 +91,31 @@ namespace ArchiveThis
                 await _database.UpsertItem(hashtagConfig);
             }
         }
+
+        private async Task<List<RequestItem>> FillRequestsWithExistingResults(List<RequestItem> items) {
+            var oldRequests=await _database.GetAllItems<RequestItem>();
+            var oldHashtags=await _database.GetAllItems<HashtagItem>();
+
+            var successFullRequests=oldRequests.Where(q=>q.ArchiveUrl!=null).ToList();
+            foreach (var hashtag in oldHashtags) {
+                var successfullHashtagRequests=hashtag.RequestItems.Where(q=>q.ArchiveUrl!=null);
+                if (successfullHashtagRequests.Any()) successFullRequests.AddRange(successfullHashtagRequests);
+            }
+
+            foreach (var item in items.Where(q=>q.State== RequestItem.RequestStates.Pending)) {
+                var successfulMatch=successFullRequests.FirstOrDefault(q=>q.Url.Equals(item.Url, StringComparison.InvariantCultureIgnoreCase));
+                if (successfulMatch!=null) {
+                    item.State= RequestItem.RequestStates.Success;
+                    item.ArchiveUrl=successfulMatch.ArchiveUrl;
+                }
+            }
+            return items;
+        }
+
         private async Task<List<RequestItem>> StoreBunchOfItems(List<RequestItem> items)
         {
             var openTasks = new List<Task<ResponseItem>>();
+            await FillRequestsWithExistingResults(items);
 
             if (!items.Any(q => q.State == RequestItem.RequestStates.Pending))
             {
@@ -121,8 +144,8 @@ namespace ArchiveThis
                     else
                     {
                         item.State = RequestItem.RequestStates.Success;
-                        item.Url = response.ArchiveUrl;
-                        _logger.LogDebug("stored '{url}'", item.Url);
+                        item.ArchiveUrl = response.ArchiveUrl;
+                        _logger.LogDebug("stored '{url}' as '{archive}'", item.Url, item.ArchiveUrl);
                     }
                 }
                 catch (Exception ex)

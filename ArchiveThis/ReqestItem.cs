@@ -2,6 +2,7 @@ using System.Diagnostics;
 using LiteDB;
 using Newtonsoft.Json;
 using ArchiveThis.Config;
+using Mastonet;
 
 namespace ArchiveThis.Models;
 
@@ -26,11 +27,14 @@ public class RequestItem
     public DateTime Created { get; set; } = DateTime.UtcNow;
     public DateTime? Updated { get; set; }
     
+    public Visibility Visibility {get;set;}
     
     public string MastodonId { get; set; }
+    public string? RequestedBy {get;set;}
     public string? ResponseId {get;set;}
     public string? Url { get; set; }
     public string? ArchiveUrl {get;set;}
     public RequestStates State { get; set; }
+    public RequestStates? OldState {get;set;}
     public Site? Site { get; set; }
 }

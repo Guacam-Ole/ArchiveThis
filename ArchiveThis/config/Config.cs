@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using Newtonsoft.Json;
 
 namespace ArchiveThis.Config;
@@ -32,6 +33,7 @@ public class Timers
     public SingleTimer CheckForMastodonRequests {get;set;}=new SingleTimer(0,2);
 }
 
+[DebuggerDisplay("Delay: {Delay}. Interval_ {Interval}")]
 public class SingleTimer {
     public SingleTimer(int minutesDelay, int minutesInterval) {
         Interval=TimeSpan.FromMinutes(minutesInterval);
@@ -40,4 +42,9 @@ public class SingleTimer {
     public SingleTimer() {}
     public TimeSpan Interval {get;set;}=TimeSpan.Zero;
     public TimeSpan Delay {get;set;}=TimeSpan.Zero;
+
+    public override string ToString()
+    {
+        return $"Delay: {Delay}. Interval: {Interval}";
+    }
 }

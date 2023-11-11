@@ -15,7 +15,7 @@ namespace ArchiveThis
             _logger = logger;
         }
 
-        public async Task<ResponseItem> GetMastodonResponseForRequest(RequestItem requestItem)
+        public async Task<ResponseItem> GetResponseFromSnapshotRequest(RequestItem requestItem)
         {
             var responseItem=new ResponseItem  {
                 RequestId=requestItem.MastodonId,

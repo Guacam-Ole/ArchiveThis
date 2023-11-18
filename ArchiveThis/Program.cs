@@ -32,8 +32,10 @@ public class Program
         services.AddLogging(logging =>
         {
             logging.ClearProviders();
-            logging.AddConsole();
-            logging.SetMinimumLevel(LogLevel.Debug);
+            logging.AddSimpleConsole(options =>
+            {
+                options.ColorBehavior = Microsoft.Extensions.Logging.Console.LoggerColorBehavior.Disabled;
+            });   
             var logFile = "archivethis.log";
             logging.AddFile(logFile, conf => { conf.Append = true; conf.MaxRollingFiles = 1; conf.FileSizeLimitBytes = 100000; });
         });

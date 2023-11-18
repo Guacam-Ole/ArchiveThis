@@ -22,7 +22,6 @@ public class Program
         archive.StartTimers();
         while (true) { 
             Thread.Sleep(10000);
-            System.Console.WriteLine("alive");
         }
     }
 

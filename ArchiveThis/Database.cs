@@ -17,7 +17,7 @@ public class Database
     }
 
 
-    public async Task UpsertItem<T>(T item)
+    public async Task UpsertItem<T>(T item) 
     {
         using var db = new LiteDatabaseAsync(_db);
         var collection = db.GetCollection<T>();

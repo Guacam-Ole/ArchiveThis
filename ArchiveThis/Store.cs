@@ -6,7 +6,7 @@ namespace ArchiveThis
     public class Store
     {
         private readonly ILogger<Store> _logger;
-        
+
         public enum ResponseCodes
         { AlreadyExists, Stored, Error };
 
@@ -17,29 +17,56 @@ namespace ArchiveThis
 
         public async Task<ResponseItem> GetResponseFromSnapshotRequest(RequestItem requestItem)
         {
-            var responseItem=new ResponseItem  {
-                RequestId=requestItem.MastodonId,
-                ResponseCode= ResponseCodes.Error
+            var responseItem = new ResponseItem
+            {
+                RequestId = requestItem.MastodonId,
+                ResponseCode = ResponseCodes.Error
             };
+            try
+            {
+                if (requestItem.Url != null)
+                {
+                    bool urlIsValid = Uri.TryCreate(requestItem.Url, UriKind.Absolute, out Uri uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
+                    if (!urlIsValid)
+                    {
+                        _logger.LogWarning("Invalid url '{url}' ", requestItem.Url);
+                        return responseItem;
+                    }
 
-            if (requestItem.Url!=null) {
-                var response = await TakeSnapshotFrom(requestItem.Url);
-                responseItem.ArchiveUrl=response.Value;
-                responseItem.ResponseCode=response.Key;
+                    var response = await TakeSnapshotFrom(requestItem.Url);
+                    responseItem.ArchiveUrl = response.Value;
+                    responseItem.ResponseCode = response.Key;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,"Cannot store url '{url}'", requestItem?.Url);
             }
             return responseItem;
         }
 
-        public async Task<bool> UrlIsFaultyOrHasContent(string url, string errorContent)
+        public async Task<bool> UrlHasContent(string url, string errorContent)
         {
-            HttpClient client = new HttpClient();
-            var checkingResponse = await client.GetAsync(url);
-            if (!checkingResponse.IsSuccessStatusCode)
+            try
             {
-                return true;
+                bool urlIsValid = Uri.TryCreate(url, UriKind.Absolute, out Uri? uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
+                if (!urlIsValid)
+                {
+                    throw new UriFormatException($"Invalid Url '{url}'");
+                }
+                HttpClient client = new HttpClient();
+                var checkingResponse = await client.GetAsync(url);
+                if (!checkingResponse.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException($"Unsuccessful request for url '{url}': {checkingResponse.StatusCode}");
+                }
+                var content = await checkingResponse.Content.ReadAsStringAsync();
+                return content.Contains(errorContent, StringComparison.InvariantCultureIgnoreCase);
             }
-            var content = await checkingResponse.Content.ReadAsStringAsync();
-            return content.Contains(errorContent, StringComparison.InvariantCultureIgnoreCase);
+            catch (Exception ex)
+            {
+                throw new Exception($"failed checking url '{url}' for contents", ex);
+            }
         }
 
 
@@ -62,7 +89,7 @@ namespace ArchiveThis
                     _logger.LogError("Cannot store URL '{url}'", urlToStore);
                     return new KeyValuePair<ResponseCodes, string?>(ResponseCodes.Error, null);
                 }
-                _logger.LogDebug("Stored '{url}' as '{archive}'", urlToStore, saveResponse);
+                //     _logger.LogDebug("Stored '{url}' as '{archive}'", urlToStore, saveResponse);
                 return new KeyValuePair<ResponseCodes, string?>(ResponseCodes.Stored, saveResponse.ToString());
             }
             catch (Exception ex)

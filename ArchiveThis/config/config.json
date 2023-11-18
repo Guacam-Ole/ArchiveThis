@@ -1,16 +1,17 @@
 {
-
-
-    "HashTags": ["hamburg","ArchiveThisTest"] ,
-    "Sites":[
-        {
-            "Domain":"abendblatt.de",
-            "FailureContent":"Zur PLUS-Anmeldung"
-        },
-        {
-            "Domain":"zecken.biz",
-            "FailureContent":"du doof"
-        }
-    ] 
+  "HashTags": [ "hamburg", "ArchiveThisTest" ],
+  "Sites": [
+    {
+      "Domain": "abendblatt.de",
+      "FailureContent": "Zur PLUS-Anmeldung"
+    },
+    {
+      "Domain": "zecken.biz",
+      "FailureContent": "du doof"
+    },
+    {
+      "Domain": "mopo.de",
+      "FailureContent": "Alles drin in MOPO+"
+    }
+  ]
 }
-    

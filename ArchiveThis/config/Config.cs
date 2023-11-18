@@ -26,19 +26,17 @@ public class Site
 
 public class Timers
 {
-    public SingleTimer HashTagCheck { get; set; } = new SingleTimer(0,1);
+    public SingleTimer HashTagCheck { get; set; } = SingleTimer.BySeconds(0,60);
     public SingleTimer CleanUp { get; set; } = new SingleTimer { Delay=TimeSpan.Zero, Interval=TimeSpan.FromDays(14)};
-    public SingleTimer SendRepliesToMastodon { get; set; } = new SingleTimer(0,5);
-    public SingleTimer SendRequestsToArchive { get; set; } = new SingleTimer(1,2);
-    public SingleTimer CheckForMastodonRequests {get;set;}=new SingleTimer(0,2);
+    public SingleTimer SendRepliesToMastodon { get; set; } = SingleTimer.ByMinutes(5,5);
+    public SingleTimer SendRequestsToArchive { get; set; } = SingleTimer.ByMinutes(1,2);
+    public SingleTimer CheckForMastodonRequests {get;set;}=SingleTimer.BySeconds(5,10);
+    public SingleTimer WatchDog {get;set;}=new SingleTimer{ Delay=TimeSpan.FromSeconds(10), Interval=TimeSpan.FromMinutes(60)};
 }
 
 [DebuggerDisplay("Delay: {Delay}. Interval_ {Interval}")]
 public class SingleTimer {
-    public SingleTimer(int minutesDelay, int minutesInterval) {
-        Interval=TimeSpan.FromMinutes(minutesInterval);
-        Delay=TimeSpan.FromMinutes(minutesDelay );
-    }
+ 
     public SingleTimer() {}
     public TimeSpan Interval {get;set;}=TimeSpan.Zero;
     public TimeSpan Delay {get;set;}=TimeSpan.Zero;
@@ -46,5 +44,12 @@ public class SingleTimer {
     public override string ToString()
     {
         return $"Delay: {Delay}. Interval: {Interval}";
+    }
+
+    public static SingleTimer BySeconds(int secondDelay, int secondInterval) {
+        return new SingleTimer { Delay=TimeSpan.FromSeconds( secondDelay), Interval= TimeSpan.FromSeconds(secondInterval)};
+    }
+    public static SingleTimer ByMinutes(int minutesDelay, int minutesInterval) {
+        return new SingleTimer { Delay=TimeSpan.FromMinutes( minutesDelay), Interval= TimeSpan.FromMinutes(minutesInterval)};
     }
 }

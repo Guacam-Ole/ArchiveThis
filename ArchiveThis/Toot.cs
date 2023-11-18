@@ -1,19 +1,24 @@
 namespace ArchiveThis;
 
+using System.Data;
 using ArchiveThis.Models;
 using Mastonet;
 using Mastonet.Entities;
+
+using Microsoft.Extensions.Logging;
 
 public class Toot
 {
     private MastodonClient _client;
     private readonly Database _database;
-    private  string[] _doArchiveTriggerWords=new  string []{ "ArchiveThisUrl", "!archive", "!url"};
+    private readonly ILogger<Toot> _logger;
+    private readonly string[] _doArchiveTriggerWords=new  string []{ "ArchiveThisUrl", "!archive", "!url"};
 
-    public Toot(Database database, Config.Secrets secrets)
+    public Toot(Database database, Config.Secrets secrets, ILogger<Toot> logger)
     {
         _client = CreateClient(secrets.Instance, secrets.AccessToken);
         _database = database;
+        _logger=logger;
     }
 
     private MastodonClient CreateClient(string instance, string secret)
@@ -24,12 +29,16 @@ public class Toot
 
     public async Task<Status> SendToot(string content, string replyTo, Visibility visibility)
     {
+        _logger.LogDebug("🐘->{replyTo}",replyTo);
         return await _client.PublishStatus(content, visibility, replyTo);
     }
     public async Task<Status> SendToot(string content, string replyToId, bool isPrivate) {
         return await SendToot(content, replyToId, isPrivate ? Visibility.Private : Visibility.Public);
     }
 
+    private async Task<Status> FavToot(string statusId) {
+        return await _client.Favourite(statusId);
+    }
 
     public async Task GetMentions() {
         var newNotificaitons=await _client.GetNotifications();
@@ -41,7 +50,7 @@ public class Toot
                     if (notification.Status==null) continue;
                         bool hasKeyword=_doArchiveTriggerWords.Any(q=>notification.Status.Content.Contains(q, StringComparison.InvariantCultureIgnoreCase));
                         if (!hasKeyword) {
-                            await SendToot($"Hey there, @{notification.Account.AccountName}. This is just a really stupid bot. So I do not really understand what you are trying to tell me.\n\n If you want me to put a url into the archive you HAVE TO put any of the following words '{string.Join(',',_doArchiveTriggerWords)}' somewhere in your toot", notification.Status.Id, notification.Status.Visibility);
+                            if (!string.IsNullOrEmpty(notification.Status.InReplyToId)) await SendToot($"Hey there, @{notification.Account.AccountName}. This is just a really stupid bot. So I do not really understand what you are trying to tell me.\n\n If you want me to put a url into the archive you HAVE TO put any of the following words '{string.Join(',',_doArchiveTriggerWords)}' somewhere in your toot", notification.Status.Id, Visibility.Direct);
                             continue;
                         }
                         var url=await GetUrlFromToot(notification.Status);
@@ -50,7 +59,6 @@ public class Toot
                             continue;
                         }
 
-                      // await SendToot($"[DEBUG] @{notification.Account.AccountName} Url '{url}' gefunden. Whoop Whoop", notification.Status.Id, notification.Status.Visibility);
                         await _database.UpsertItem(new RequestItem {
                             MastodonId=notification.Status.Id, 
                             State= RequestItem.RequestStates.Pending, 
@@ -58,9 +66,11 @@ public class Toot
                             Url=url,
                             Visibility= notification.Status.Visibility
                         });
+                        await FavToot(notification.Status.Id);
+
                     break;
                     case "follow":
-                        await SendToot($"Hey, @{notification.Account.AccountName} Great that you followed me. Just be aware this is NOT necessary if you want me to archive stuff as this might fill up your timeline a bit :)", null, true);
+                        await SendToot($"Hey, @{notification.Account.AccountName} Great that you followed me. Just be aware this is NOT necessary if you want me to archive stuff :)", null, true);
                     break;
                 }
             }
@@ -78,13 +88,13 @@ public class Toot
     public async Task GetFeaturedTags(string hashtag)
     {
         var existingConfigs = await _database.GetAllItems<HashtagItem>();
-        var hashtagConfig = existingConfigs.FirstOrDefault(q => q.Tag == hashtag) ?? new Models.HashtagItem { Tag = hashtag };
+        var hashtagConfig = existingConfigs.FirstOrDefault(q => q.Tag == hashtag) ?? new HashtagItem { Tag = hashtag };
         var options = new ArrayOptions();
 
         var latest = hashtagConfig.RequestItems.OrderByDescending(q => q.Created).FirstOrDefault();
         if (latest == null)
         {
-            options.Limit = 10;
+            options.Limit = 1;
         }
         else
         {

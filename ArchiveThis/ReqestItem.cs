@@ -37,4 +37,10 @@ public class RequestItem
     public RequestStates State { get; set; }
     public RequestStates? OldState {get;set;}
     public Site? Site { get; set; }
+
+
+    public override string ToString()
+    {
+        return $"{Id}|Mastodon:{MastodonId}|Url:{Url}|State:{State}";
+    }
 }

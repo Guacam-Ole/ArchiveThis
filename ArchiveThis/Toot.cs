@@ -62,7 +62,7 @@ public class Toot
             bool hasKeyword = _doArchiveTriggerWords.Any(q => mention.Status.Content.Contains(q, StringComparison.InvariantCultureIgnoreCase));
             if (!hasKeyword)
             {
-                if (!string.IsNullOrEmpty(mention.Status.InReplyToId)) await SendToot($"Hey there, @{mention.Account.AccountName}. This is just a really stupid bot. So I do not really understand what you are trying to tell me.\n\n If you want me to put a url into the archive you HAVE TO put any of the following words '{string.Join(',', _doArchiveTriggerWords)}' somewhere in your toot. I also can only find URLs in toots you reply to or your toot", mention.Status.Id, null, Visibility.Direct);
+                if (string.IsNullOrEmpty(mention.Status.InReplyToId)) await SendToot($"Hey there, @{mention.Account.AccountName}. This is just a really stupid bot. So I do not really understand what you are trying to tell me.\n\n If you want me to put a url into the archive you HAVE TO put any of the following words '{string.Join(',', _doArchiveTriggerWords)}' somewhere in your toot. I also can only find URLs in toots you reply to or your toot", mention.Status.Id, null, Visibility.Direct);
                 continue;
             }
             var url = await GetUrlFromToot(mention.Status);

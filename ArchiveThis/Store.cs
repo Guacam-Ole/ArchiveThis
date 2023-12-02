@@ -54,17 +54,18 @@ namespace ArchiveThis
                 {
                     throw new UriFormatException($"Invalid Url '{url}'");
                 }
-                HttpClient client = new HttpClient();
+                HttpClient client = new HttpClient() { Timeout = TimeSpan.FromSeconds(30) };
                 var checkingResponse = await client.GetAsync(url);
                 if (!checkingResponse.IsSuccessStatusCode)
                 {
                     throw new HttpRequestException($"Unsuccessful request for url '{url}': {checkingResponse.StatusCode}");
                 }
                 var content = await checkingResponse.Content.ReadAsStringAsync();
-                return content.Contains(errorContent, StringComparison.InvariantCultureIgnoreCase);
+                return content.Contains(errorContent, StringComparison.InvariantCultureIgnoreCase) || content.Contains("The Wayback Machine has not archived that URL", StringComparison.InvariantCultureIgnoreCase);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "failed retrieving content: {msg}",ex.Message);
                 throw new Exception($"failed checking url '{url}' for contents", ex);
             }
         }

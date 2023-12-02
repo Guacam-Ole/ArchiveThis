@@ -41,6 +41,6 @@ public class Database
     public async Task<List<RequestItem>> GetItemsForReply() {
         using var db = new LiteDatabaseAsync(_db);
         var collection = db.GetCollection<RequestItem>();
-        return (await collection.FindAsync(q=>q.ResponseId==null)).ToList();
+        return (await collection.FindAsync(q=>q.State!= RequestItem.RequestStates.Posted)).ToList();
     }
 }

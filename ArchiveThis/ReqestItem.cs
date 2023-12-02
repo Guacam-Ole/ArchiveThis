@@ -17,9 +17,9 @@ public class RequestItem
         Success,
         Error,
         InvalidUrl,
-        //Ignored,
         AlreadyBlocked,
-        Posted
+        Posted,
+        GivingUp
     }
 
     public ObjectId Id {get;set;}
@@ -37,6 +37,7 @@ public class RequestItem
     public RequestStates State { get; set; }
     public RequestStates? OldState {get;set;}
     public Site? Site { get; set; }
+    public int ErrorCount { get; set; } = 0;
 
 
     public override string ToString()

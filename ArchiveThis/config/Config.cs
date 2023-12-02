@@ -32,6 +32,7 @@ public class Timers
     public SingleTimer SendRequestsToArchive { get; set; } = SingleTimer.ByMinutes(1,2);
     public SingleTimer CheckForMastodonRequests {get;set;}=SingleTimer.BySeconds(5,10);
     public SingleTimer WatchDog {get;set;}=new SingleTimer{ Delay=TimeSpan.FromSeconds(10), Interval=TimeSpan.FromMinutes(60)};
+    public SingleTimer RecheckArchiveUrls { get; set; } = SingleTimer.ByMinutes(1, 15);
 }
 
 [DebuggerDisplay("Delay: {Delay}. Interval_ {Interval}")]

@@ -1,6 +1,9 @@
 ﻿namespace ArchiveThis;
 
 using System;
+using System.Diagnostics;
+using System.Reflection;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -19,8 +22,12 @@ public class Program
             Environment.Exit(0);
         };
 
+        //var store=services.GetRequiredService<Store>();
+        //store.UrlHasContent("https://web.archive.org/web/20231120162250/https://www.mopo.de/hamburg/von-altona-nach-bad-oldesloe-so-steht-es-um-die-neue-s4", "doof").Wait();
+
         archive.StartTimers();
-        while (true) { 
+        while (true)
+        {
             Thread.Sleep(10000);
         }
     }
@@ -32,12 +39,13 @@ public class Program
         services.AddLogging(logging =>
         {
             logging.ClearProviders();
+            logging.SetMinimumLevel(LogLevel.Debug);
             logging.AddSimpleConsole(options =>
             {
                 options.ColorBehavior = Microsoft.Extensions.Logging.Console.LoggerColorBehavior.Disabled;
             });   
             var logFile = "archivethis.log";
-            logging.AddFile(logFile, conf => { conf.Append = true; conf.MaxRollingFiles = 1; conf.FileSizeLimitBytes = 100000; });
+            logging.AddFile(logFile, conf => { conf.MinLevel = LogLevel.Debug; conf.Append = true; conf.MaxRollingFiles = 1; conf.FileSizeLimitBytes = 100000; });
         });
         services.AddScoped<Database>();
         services.AddScoped<Toot>();

@@ -3,6 +3,8 @@ using ArchiveThis.Models;
 
 using Microsoft.Extensions.Logging;
 
+using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -34,13 +36,22 @@ namespace ArchiveThis
             foreach (var config in hashtagConfigs)
             {
                 var succeededItems = config.RequestItems.Where(q => q.State == RequestItem.RequestStates.Success);
-                _logger.LogDebug("🐘 sending '{count}' successful archives for '{tag}' back", succeededItems.Count(), config.Tag);
+                if (!succeededItems.Any()) continue;
+                _logger.LogDebug("🐘 sending '{count}' successful archives for #{tag} back", succeededItems.Count(), config.Tag);
                 foreach (var item in succeededItems)
                 {
-                    var text = $"That Url has been archived as {item.ArchiveUrl}. \n\n#{config.Tag} #ArchiveThis";
-                    var mastodonResponse = await _toot.SendToot(text, item.MastodonId, false);
-                    item.ResponseId = mastodonResponse?.Id;
-                    item.State = RequestItem.RequestStates.Posted;
+                    try
+                    {
+                        var text = $"That Url has been archived as {item.ArchiveUrl}. \n\n #ArchiveThis";
+                        var mastodonResponse = await _toot.SendToot(text, item.MastodonId,  item.ResponseId, Mastonet.Visibility.Unlisted);
+                        item.ResponseId = mastodonResponse?.Id;
+                        item.State = RequestItem.RequestStates.Posted;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Failed Hashtagresponse, {item.Id}");
+                        item.State = RequestItem.RequestStates.GivingUp;
+                    }
                 }
                 await _database.UpsertItem(config);
             }
@@ -59,36 +70,67 @@ namespace ArchiveThis
                     if (string.IsNullOrEmpty(requestItem.Url))
                     {
                         requestItem.State = RequestItem.RequestStates.InvalidUrl;
+                        _logger.LogInformation("Url was empty.");
                         continue;
                     }
                     var matchingSite = _config.Sites.FirstOrDefault(q => requestItem.Url.Contains(q.Domain, StringComparison.InvariantCultureIgnoreCase));
                     if (matchingSite == null)
                     {
                         requestItem.State = RequestItem.RequestStates.InvalidUrl;
+                        _logger.LogDebug("No matching site for '{url}' found", requestItem.Url);
                         continue;
                     }
                     requestItem.Site = matchingSite;
                     requestItem.Updated = DateTime.Now;
+                    _logger.LogDebug("Added url '{url}' for hashtag", requestItem.Url);
                 }
                 hashtagConfig.RequestItems = await StoreBunchOfItems(hashtagConfig.RequestItems);
-                foreach (var item in hashtagConfig.RequestItems.Where(q => q.State == RequestItem.RequestStates.Success))
+                Thread.Sleep(10000);
+                await CheckHashtagItems(hashtagConfig, RequestItem.RequestStates.Success);
+                await RespondHashtagResults();
+            }
+        }
+
+        private async Task CheckHashtagItems(HashtagItem hashtagConfig, RequestItem.RequestStates state)
+        {
+            _logger.LogDebug("checking by state '{state}'", state);
+            foreach (var item in hashtagConfig.RequestItems.Where(q => q.State == state && q.ErrorCount < 5))
+            {
+                if (item.Site == null || item.ArchiveUrl == null || item.Url == null) continue;
+                try
                 {
-                    if (item.Site == null || item.ArchiveUrl == null || item.Url == null) continue;
-                    try
+                    if (await _store.UrlHasContent(item.ArchiveUrl, item.Site.FailureContent))
                     {
-                        if (await _store.UrlHasContent(item.ArchiveUrl, item.Site.FailureContent))
-                        {
-                            item.State = RequestItem.RequestStates.AlreadyBlocked;
-                            _logger.LogWarning("💣 Url '{url}' is already blocked", item.Url);
-                        }
+                        item.State = RequestItem.RequestStates.AlreadyBlocked;
+                        _logger.LogWarning("💣 Url '{url}' is already blocked -  {archive}", item.Url, item.ArchiveUrl);
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        _logger.LogWarning("Failed checking url, {message}", ex.Message);
-                        item.State = RequestItem.RequestStates.Error;
+                        item.State = RequestItem.RequestStates.Success;
+                        _logger.LogDebug("That was a success -  {archive}", item.ArchiveUrl);
                     }
                 }
-                await _database.UpsertItem(hashtagConfig);
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("Failed checking url '{url}', {message}", item.ArchiveUrl, ex.Message);
+                    item.ErrorCount++;
+                    item.State = RequestItem.RequestStates.Error;
+                }
+            }
+            await _database.UpsertItem(hashtagConfig);
+        }
+
+        private async Task RecheckUrls()
+        {
+            foreach (var hashtag in _config.HashTags)
+            {
+                await _toot.GetFeaturedTags(hashtag);
+                var hashtagConfigs = await _database.GetAllItems<HashtagItem>();
+                var hashtagConfig = hashtagConfigs.FirstOrDefault(q => q.Tag == hashtag);
+                if (hashtagConfig == null) continue;
+
+                await CheckHashtagItems(hashtagConfig, RequestItem.RequestStates.Error);
+            
             }
         }
 
@@ -125,15 +167,16 @@ namespace ArchiveThis
             {
                 return items;
             }
-            _logger.LogDebug("🤖 Sending {count} urls to archive", items.Count);
+            _logger.LogInformation("🤖 Sending {count} urls to archive", items.Count);
             foreach (var item in items.Where(q => q.State == RequestItem.RequestStates.Pending))
             {
                 item.State = RequestItem.RequestStates.Running;
                 openTasks.Add(_store.GetResponseFromSnapshotRequest(item));
+                await _database.UpsertItem(item);
             }
 
             var responses = await Task.WhenAll(openTasks);
-            _logger.LogDebug("🤖 Archive finished");
+            _logger.LogInformation("🤖 Archive finished");
 
             foreach (var response in responses)
             {
@@ -149,7 +192,7 @@ namespace ArchiveThis
                     {
                         item.State = RequestItem.RequestStates.Success;
                         item.ArchiveUrl = response.ArchiveUrl;
-                        _logger.LogDebug("🤖 stored '{url}' as '{archive}'", item.Url, item.ArchiveUrl);
+                        _logger.LogInformation("🤖 stored '{url}' as '{archive}'", item.Url, item.ArchiveUrl);
                     }
                 }
                 catch (Exception ex)
@@ -164,7 +207,7 @@ namespace ArchiveThis
         {
             try
             {
-                await _toot.GetMentions();
+                await _toot.GetNotifications();
             }
             catch (Exception ex)
             {
@@ -177,45 +220,65 @@ namespace ArchiveThis
             var replyItems = await _database.GetItemsForReply();
             foreach (var item in replyItems)
             {
-                _logger.LogDebug("🐘 Sending response for item '{item}' ", item);
-                switch (item.State)
+                try
                 {
-                    case RequestItem.RequestStates.Success:
-                        item.OldState = item.State;
-                        await SendMastodonResponse(item, $"@{item.RequestedBy} Here is your archived URL: {item.ArchiveUrl}.");
-                        break;
+                    _logger.LogDebug("🐘 Sending response for item '{item}' ", item);
+                    switch (item.State)
+                    {
+                        case RequestItem.RequestStates.Success:
+                            item.OldState = item.State;
+                            await SendMastodonResponse(item, $"@{item.RequestedBy} Here is your archived URL: {item.ArchiveUrl}.");
+                            break;
 
-                    case RequestItem.RequestStates.Error:
-                        await SendMastodonResponse(item, $"I'm sorry, @{item.RequestedBy} , I cannot do that. \n (Archiving failed for that url)");
-                        break;
+                        case RequestItem.RequestStates.Error:
+                            await SendMastodonResponse(item, $"I'm sorry, @{item.RequestedBy} , I cannot do that. \n (Archiving failed for that url)");
+                            break;
 
-                    case RequestItem.RequestStates.AlreadyBlocked:
-                        await SendMastodonResponse(item, $"I'm sorry, @{item.RequestedBy} , looks like we are too late. \n (The Paywall kicked in)");
-                        break;
+                        case RequestItem.RequestStates.AlreadyBlocked:
+                            await SendMastodonResponse(item, $"I'm sorry, @{item.RequestedBy} , looks like we are too late. \n (The Paywall kicked in)");
+                            break;
 
-                    case RequestItem.RequestStates.InvalidUrl:
-                        await SendMastodonResponse(item, $"You are a funny guy, @{item.RequestedBy}. \n (There was no URL anywhere)");
-                        break;
+                        case RequestItem.RequestStates.InvalidUrl:
+                            await SendMastodonResponse(item, $"You are a funny guy, @{item.RequestedBy}. \n (There was no URL anywhere)");
+                            break;
 
-                    default:
-                        continue;
+                        default:
+                            continue;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed sendint toot. Will not retry");
+                    item.State = RequestItem.RequestStates.GivingUp;
                 }
             }
         }
 
         private async Task SendMastodonResponse(RequestItem item, string text)
         {
-            var responseStatus = await _toot.SendToot(text, item.MastodonId, item.Visibility);
-            if (responseStatus == null)
+            try
             {
-                _logger.LogError("🐘 Cannot reply to mastodon.");
+                var responseStatus = await _toot.SendToot(text, item.MastodonId, item.ResponseId, item.Visibility);
+                if (responseStatus == null)
+                {
+                    _logger.LogError("🐘 Cannot reply to mastodon. Giving up");
+                    item.State = RequestItem.RequestStates.GivingUp;
+                    await _database.UpsertItem(item);
+                }
+                else
+                {
+                    item.ResponseId = responseStatus.Id;
+                    item.OldState = item.State;
+                    item.State = RequestItem.RequestStates.Posted;
+                    item.Updated = DateTime.Now;
+                    await _database.UpsertItem(item);
+                    _logger.LogDebug("sent Message '{msg}'", text);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                item.ResponseId = responseStatus.Id;
-                item.OldState = item.State;
-                item.State = RequestItem.RequestStates.Posted;
-                item.Updated = DateTime.Now;
+                _logger.LogError(ex, "🐘 Cannot reply to mastodon. Exception");
+                item.State = RequestItem.RequestStates.GivingUp;
                 await _database.UpsertItem(item);
             }
         }
@@ -228,13 +291,16 @@ namespace ArchiveThis
 
         public void StartTimers()
         {
-            _logger.LogInformation("⌚ Starting Timers");
+            var copyright = FileVersionInfo.GetVersionInfo(Assembly.GetEntryAssembly().Location).LegalCopyright;
+
+            _logger.LogInformation("⌚ Starting Timers. {copyright}", copyright);
             InitTimer(CheckMastodonRequestsTimerCallback, _config.Timers.CheckForMastodonRequests);
             InitTimer(StoreUrlsInArchiveTimerCallback, _config.Timers.SendRequestsToArchive);
             InitTimer(ReplyTimerCallback, _config.Timers.SendRepliesToMastodon);
             InitTimer(CleanupTimerCallback, _config.Timers.CleanUp);
             InitTimer(HashtagTimerCallback, _config.Timers.HashTagCheck);
             InitTimer(WatchDogCallBack, _config.Timers.WatchDog);
+            InitTimer(ReCheckCallBack, _config.Timers.RecheckArchiveUrls);
             _logger.LogInformation("⌚ Up and running");
         }
 
@@ -268,6 +334,19 @@ namespace ArchiveThis
                 {
                     output.AppendLine($"            {hashTagRequestByState.First().State}:{hashTagRequestByState.Count()}");
                 }
+            }
+        }
+
+        private void ReCheckCallBack(object? state)
+        {
+            try
+            {
+                RecheckUrls().Wait();
+                AddTimerRun();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in recheckTimer");
             }
         }
 
@@ -348,6 +427,7 @@ namespace ArchiveThis
             try
             {
                 await SendReplies();
+                await RespondHashtagResults();
                 AddTimerRun();
             }
             catch (Exception ex)

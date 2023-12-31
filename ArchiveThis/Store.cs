@@ -1,5 +1,6 @@
 ﻿using ArchiveThis.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 
 namespace ArchiveThis
 {
@@ -45,7 +46,7 @@ namespace ArchiveThis
             return responseItem;
         }
 
-        public async Task<bool> UrlHasContent(string url, string errorContent)
+        public async Task<bool> UrlHasContent(string url, List<string> errorContent)
         {
             try
             {
@@ -61,7 +62,7 @@ namespace ArchiveThis
                     throw new HttpRequestException($"Unsuccessful request for url '{url}': {checkingResponse.StatusCode}");
                 }
                 var content = await checkingResponse.Content.ReadAsStringAsync();
-                return content.Contains(errorContent, StringComparison.InvariantCultureIgnoreCase) || content.Contains("The Wayback Machine has not archived that URL", StringComparison.InvariantCultureIgnoreCase);
+                return errorContent.Any(q=>content.Contains(q, StringComparison.InvariantCultureIgnoreCase)) || content.Contains("The Wayback Machine has not archived that URL", StringComparison.InvariantCultureIgnoreCase);
             }
             catch (Exception ex)
             {

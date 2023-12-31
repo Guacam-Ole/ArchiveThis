@@ -93,8 +93,9 @@ namespace ArchiveThis
 
         private async Task CheckHashtagItems(HashtagItem hashtagConfig, RequestItem.RequestStates state)
         {
-            _logger.LogDebug("checking by state '{state}'", state);
-            foreach (var item in hashtagConfig.RequestItems.Where(q => q.State == state && q.ErrorCount < 5))
+            var items = hashtagConfig.RequestItems.Where(q => q.State == state && q.ErrorCount < 5);
+            if (items.Any()) _logger.LogInformation("^Checking Hashtagitems by state '{state}' for '{tag}': {count} items found", state, items.Count(), hashtagConfig.Tag);
+            foreach (var item in items)
             {
                 if (item.Site == null || item.ArchiveUrl == null || item.Url == null) continue;
                 try
@@ -203,6 +204,8 @@ namespace ArchiveThis
             return items;
         }
 
+
+
         public async Task CheckNotifications()
         {
             try
@@ -218,7 +221,7 @@ namespace ArchiveThis
         private async Task SendReplies()
         {
             var replyItems = await _database.GetItemsForReply();
-            foreach (var item in replyItems)
+            foreach (var item in replyItems.Where(q=>q.State!= RequestItem.RequestStates.Running))
             {
                 try
                 {
@@ -228,18 +231,22 @@ namespace ArchiveThis
                         case RequestItem.RequestStates.Success:
                             item.OldState = item.State;
                             await SendMastodonResponse(item, $"@{item.RequestedBy} Here is your archived URL: {item.ArchiveUrl}.");
+                            _logger.LogDebug("🐘 Sent Success response for item '{item}' ", item);
                             break;
 
                         case RequestItem.RequestStates.Error:
                             await SendMastodonResponse(item, $"I'm sorry, @{item.RequestedBy} , I cannot do that. \n (Archiving failed for that url)");
+                            _logger.LogDebug("🐘 Sent Error response for item '{item}' ", item);
                             break;
 
                         case RequestItem.RequestStates.AlreadyBlocked:
                             await SendMastodonResponse(item, $"I'm sorry, @{item.RequestedBy} , looks like we are too late. \n (The Paywall kicked in)");
+                            _logger.LogDebug("🐘 Sent Blocked response for item '{item}' ", item);
                             break;
 
                         case RequestItem.RequestStates.InvalidUrl:
                             await SendMastodonResponse(item, $"You are a funny guy, @{item.RequestedBy}. \n (There was no URL anywhere)");
+                            _logger.LogDebug("🐘 Sent Invalid response for item '{item}' ", item);
                             break;
 
                         default:
@@ -248,7 +255,7 @@ namespace ArchiveThis
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed sendint toot. Will not retry");
+                    _logger.LogError(ex, "Failed sending toot. Will not retry");
                     item.State = RequestItem.RequestStates.GivingUp;
                 }
             }

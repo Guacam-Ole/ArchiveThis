@@ -91,7 +91,7 @@ public class Toot
     {
         foreach (var follow in follows)
         {
-            await SendToot($"Hey, @{follow.Account.AccountName} Great that you followed me. Just be aware this is NOT necessary if you want me to archive stuff :) \n\nThis is how this works:\n If you want me to archive an url mention me and add one of the following keywords:\n{string.Join(',', _doArchiveTriggerWords)}\n\nWhen I fav your toot you will know that I have seen it. I will then try to find any URL in one of the toots you replied to.\n(I cannot archive mastodon-urls and will ignore any url that has already been archived) ", null, null, Visibility.Private);
+            await SendToot($"Hey, @{follow.Account.AccountName} Great that you followed me. Just be aware this is NOT necessary if you want me to archive stuff :) \n\nThis is how this works:\n If you want me to archive an url mention me and add one of the following keywords:\n{string.Join(',', _doArchiveTriggerWords)}\n\nWhen I fav your toot you will know that I have seen it. I will then try to find any URL in one of the toots you replied to.\n(I cannot archive mastodon-urls and will ignore any url that has already been archived) ", null, null, Visibility.Direct);
         }
     }
 

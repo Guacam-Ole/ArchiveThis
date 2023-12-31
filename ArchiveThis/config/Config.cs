@@ -14,20 +14,20 @@ public class Config
     public List<string> HashTags { get; set; }=new List<string>();
     public List<Site> Sites { get; set; }=new List<Site>();
     public Timers Timers {get;set;}=new Timers();
-    public int DeleteSuccessFulRequestAfterDays {get;set;}=30;
+    public int DeleteSuccessFulRequestAfterDays {get;set;}=7;
     public int DeleteFailedRequestsAfterDays {get;set;}=14;
 }
 
 public class Site
 {
     public string Domain { get; set; }
-    public string FailureContent { get; set; }
+    public List<string> FailureContent { get; set; }
 }
 
 public class Timers
 {
     public SingleTimer HashTagCheck { get; set; } = SingleTimer.BySeconds(0,60);
-    public SingleTimer CleanUp { get; set; } = new SingleTimer { Delay=TimeSpan.Zero, Interval=TimeSpan.FromDays(14)};
+    public SingleTimer CleanUp { get; set; } = new SingleTimer { Delay=TimeSpan.Zero, Interval=TimeSpan.FromDays(2)};
     public SingleTimer SendRepliesToMastodon { get; set; } = SingleTimer.ByMinutes(5,5);
     public SingleTimer SendRequestsToArchive { get; set; } = SingleTimer.ByMinutes(1,2);
     public SingleTimer CheckForMastodonRequests {get;set;}=SingleTimer.BySeconds(5,10);

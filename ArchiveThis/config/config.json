@@ -3,15 +3,15 @@
   "Sites": [
     {
       "Domain": "abendblatt.de",
-      "FailureContent": "Zur PLUS-Anmeldung"
+      "FailureContent": [ "Zur PLUS-Anmeldung" ]
     },
     {
       "Domain": "zecken.biz",
-      "FailureContent": "du doof"
+      "FailureContent": [ "du doof" ]
     },
     {
       "Domain": "mopo.de",
-      "FailureContent": "Alles drin in MOPO+"
+      "FailureContent": [ "Alles drin in MOPO+", "paywall-article" ]
     }
   ]
 }

@@ -66,6 +66,8 @@ public class Toot
 
     private async Task<string?> GetUrlFromToot(Status toot)
     {
+        _logger.LogDebug("Trying to find url in {Text}", toot?.Card?.Html);
+        _logger.LogDebug("Toot: {toot}", toot);
         if (!string.IsNullOrEmpty(toot.Card?.Url)) return toot.Card.Url;
 
         if (toot.Card == null)

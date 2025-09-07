@@ -1,4 +1,9 @@
-﻿namespace ArchiveThis;
+﻿using Serilog;
+using Serilog.Events;
+using Serilog.Formatting.Compact;
+using Serilog.Sinks.Grafana.Loki;
+
+namespace ArchiveThis;
 
 using System;
 using System.Diagnostics;
@@ -13,22 +18,28 @@ public class Program
     {
         Console.WriteLine("Mastodon-WaybackBot init");
         var services = AddServices();
-        var archive = services.GetRequiredService<Archive>();
-        System.Console.WriteLine("Press Crtl-C to end all timers");
+        var toot = services.GetRequiredService<Toot>();
+        Console.WriteLine("Press Crtl-C to stop");
 
-        Console.CancelKeyPress += (s, e) =>
+        var stopApplication = false;
+        Console.CancelKeyPress += (_, _) =>
         {
-            System.Console.WriteLine("bye");
-            Environment.Exit(0);
+            Console.WriteLine("stopping after loop");
+            stopApplication=true;
         };
-
-        //var store=services.GetRequiredService<Store>();
-        //store.UrlHasContent("https://web.archive.org/web/20231120162250/https://www.mopo.de/hamburg/von-altona-nach-bad-oldesloe-so-steht-es-um-die-neue-s4", "doof").Wait();
-
-        archive.StartTimers();
-        while (true)
+        while (!stopApplication)
         {
-            Thread.Sleep(10000);
+            try
+            {
+                toot.GetNotifications().Wait();
+                Thread.Sleep(TimeSpan.FromSeconds(10));
+            }
+            catch (Exception e)
+
+            {
+                Console.WriteLine(e.ToString());
+                Thread.Sleep(TimeSpan.FromMinutes(10));
+            }
         }
     }
 
@@ -36,21 +47,30 @@ public class Program
     {
         var services = new ServiceCollection();
 
-        services.AddLogging(logging =>
+        services.AddLogging(cfg => cfg.SetMinimumLevel(LogLevel.Debug));
+        services.AddSerilog(cfg =>
         {
-            logging.ClearProviders();
-            logging.SetMinimumLevel(LogLevel.Debug);
-            logging.AddSimpleConsole(options =>
+            cfg.MinimumLevel.Debug()
+                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+                .Enrich.FromLogContext()
+                .Enrich.WithProperty("job", Assembly.GetEntryAssembly()?.GetName().Name)
+                .Enrich.WithProperty("service", Assembly.GetEntryAssembly()?.GetName().Name)
+                .Enrich.WithProperty("desktop", Environment.GetEnvironmentVariable("DESKTOP_SESSION"))
+                .Enrich.WithProperty("language", Environment.GetEnvironmentVariable("LANGUAGE"))
+                .Enrich.WithProperty("lc", Environment.GetEnvironmentVariable("LC_NAME"))
+                .Enrich.WithProperty("timezone", Environment.GetEnvironmentVariable("TZ"))
+                .Enrich.WithProperty("dotnetVersion", Environment.GetEnvironmentVariable("DOTNET_VERSION"))
+                .Enrich.WithProperty("inContainer",
+                    Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"))
+                .WriteTo.GrafanaLoki(Environment.GetEnvironmentVariable("LOKIURL") ?? "http://thebeast:3100",
+                    propertiesAsLabels: ["job"]);
+            if (Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration ==
+                "Debug")
             {
-                options.ColorBehavior = Microsoft.Extensions.Logging.Console.LoggerColorBehavior.Disabled;
-            });   
-            var logFile = "archivethis.log";
-            logging.AddFile(logFile, conf => { conf.MinLevel = LogLevel.Debug; conf.Append = true; conf.MaxRollingFiles = 1; conf.FileSizeLimitBytes = 100000; });
+                cfg.WriteTo.Console(new RenderedCompactJsonFormatter());
+            }
         });
-        services.AddScoped<Database>();
         services.AddScoped<Toot>();
-        services.AddScoped<Archive>();
-        services.AddScoped<Store>();
         services.AddSingleton(Config.Config.GetConfig());
         services.AddSingleton(Config.Secrets.GetSecrets());
 

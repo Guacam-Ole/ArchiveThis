@@ -1,2 +1,2 @@
 # ArchiveThis
-Mastodon-Bot to automatically store URLs into Wayback-Machine
+Mastodon-Bot that simply responds with a (possibly) existing archive.is url

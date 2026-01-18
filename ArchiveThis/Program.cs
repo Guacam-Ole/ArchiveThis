@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 
 public class Program
 {
-    private static void Main(string[] args)
+    private static async Task Main(string[] args)
     {
         Console.WriteLine("Mastodon-WaybackBot init");
         var services = AddServices();
@@ -31,7 +31,7 @@ public class Program
         {
             try
             {
-                toot.GetNotifications().Wait();
+                await toot.GetNotifications();
                 Thread.Sleep(TimeSpan.FromSeconds(10));
             }
             catch (Exception e)
@@ -42,6 +42,8 @@ public class Program
             }
         }
     }
+
+
 
     private static IServiceProvider AddServices()
     {
